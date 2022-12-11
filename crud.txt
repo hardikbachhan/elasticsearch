@@ -1,0 +1,35 @@
+# Click the Variables button, above, to create your own variables.
+GET ${exampleVariable1} // _search
+{
+  "query": {
+    "${exampleVariable2}": {} // match_all
+  }
+}
+
+# get all indices
+GET _cat/indices?v=true
+
+# create new document in an existing or new index
+POST test/_doc/5
+{
+  "title": "this is the fifth test doc"
+}
+
+# get all docs in an index
+GET test/_search
+
+# search a word in all docs of an index
+GET test/_search
+{
+  "query": {
+    "match": {
+      "title": "first"
+    }
+  }
+}
+
+# delete a document in an index
+DELETE test/_doc/3
+
+# get first 10 document in ecommerce sample dataset
+GET kibana_sample_data_ecommerce/_search
