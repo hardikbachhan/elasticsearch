@@ -1,0 +1,575 @@
+
+// 16th dec, 2022
+
+// match query coupled with fuzziness
+
+GET dummy_np/_search
+{
+  "query": {
+    "match": {
+      "headline": {
+        "query": "Mcihlele Obama",
+        "operator": "and", 
+        "fuzziness": "AUTO"
+      }
+    }
+  }
+}
+
+// read doc again
+GET dummy_np/_search
+{
+  "query": {
+    "match": {
+      "headline": {
+        "query": "zc",
+        "zero_terms_query": "all"
+      }
+    }
+  }
+}
+
+GET _cat/indices
+DELETE /dummy_np_v4
+
+// search as you type field type
+GET dummy_np/_mapping
+
+PUT dummy_np_v4
+{
+  "mappings": {
+    "properties": {
+      "authors": {
+        "type": "search_as_you_type"
+      },
+      "category": {
+        "type": "keyword"
+      },
+      "date": {
+        "type": "date",
+        "format": "iso8601"
+      },
+      "headline": {
+        "type": "search_as_you_type"
+      },
+      "link": {
+        "type": "keyword"
+      },
+      "short_description": {
+        "type": "text"
+      }
+    }
+  }
+}
+
+GET kibana_sample_data_flights/_search
+
+
+// mapping of v1
+GET dummy_np/_mapping
+
+// search without search-as-you-type
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match": {
+      "headline": "par"
+    }
+  }
+}
+
+GET dummy_np/_search
+{
+  "query": {
+    "match": {
+      "authors": "cam"
+    }
+  }
+}
+
+// reindexing base index to updated index
+
+POST _reindex?wait_for_completion=false
+{
+  "source": {
+    "index": "dummy_np"
+  },
+  "dest": {
+    "index": "dummy_np_v4"
+  }
+}
+
+// check task progress
+GET _tasks/0Ju0zN_4Qdqq5myyW5Oi-g:99819
+
+// {
+//  "task": "0Ju0zN_4Qdqq5myyW5Oi-g:99819"
+// }
+
+GET dummy_np_v4/_mapping
+
+// search with search-as-you-type
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "headline": "par"
+    }
+  }
+}
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "par",
+      "type": "bool_prefix",
+      "fields": [
+        "headline",
+        "headline._2gram",
+        "headline._3gram",
+        "headline._index_prefix"
+      ]
+    }
+  }
+}
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "cam",
+      "type": "bool_prefix",
+      "fields": [
+        "authors",
+        "authors._2gram",
+        "authors._3gram",
+        "authors._index_prefix"
+      ]
+    }
+  }
+}
+
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "headline": "cam"
+    }
+  }
+}
+
+
+
+
+
+GET dummy_np/_mapping
+
+GET dummy_np_v3/_count
+
+GET dummy_np_v3/_search
+{
+  "size": 0,
+  "aggs": {
+    "categories": {
+      "terms": {
+        "field": "category"
+      }
+    }
+  }
+}
+
+// searches prefix and infix and in no particular order, will score documents higher if they contain the terms in order in a shingle subfield
+GET dummy_np_v4/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "cam",
+      "type": "bool_prefix",
+      "fields": [
+        "authors",
+        "authors._2gram",
+        "authors._3gram"
+      ]
+    }
+  }
+}
+
+// prefix matching in search-as-you-type
+GET dummy_np_v3/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "headline": "pere"
+    }
+  }
+}
+
+
+// combined queries
+
+GET dummy_np/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match_phrase": {
+            "headline": "michelle obama"
+          }
+        }
+      ],
+      "must_not": [
+        {
+          "match_phrase": {
+            "category": "STYLE & BEAUTY"
+          }
+        }
+      ]
+    }
+  }
+}
+
+GET dummy_np/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match_phrase": {
+            "headline": "michelle obama"
+          }
+        }
+      ],
+      "must_not": [
+        {
+          "match_phrase": {
+            "category": "STYLE & BEAUTY"
+          }
+        }
+      ],
+      "should": [
+        {
+          "match_phrase": {
+            "category": "BLACK VOICES"
+          }
+        }
+      ],
+      "filter": {
+        "range": {
+          "date": {
+            "gte": "2016-05-23",
+            "lte": "2018-05-24"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+
+// aggregations
+
+
+// 1. Metric Aggregation
+
+GET _cat/indices
+
+
+GET kibana_sample_data_ecommerce/_search
+
+GET kibana_sample_data_ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "total_revenue": {
+      "sum": {
+        "field": "taxful_total_price"
+      }
+    }
+  }
+}
+
+
+GET ecommerce_data/_search
+
+// lowest unit price
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "lowest_transaction_amount": {
+      "min": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+// stats aggregation
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "all_stats_unit_price": {
+      "stats": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+// number of unique customers who have brought something
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "num_unique_customers": {
+      "cardinality": {
+        "field": "CustomerID"
+      }
+    }
+  }
+}
+
+
+// limiting scope of aggregation
+GET dummy_np/_search
+{
+  "query": {
+    "match_phrase": {
+      "headline": "michelle obama"
+    }
+  },
+  "aggs": {
+    "category_mentions": {
+      "terms": {
+        "field": "category",
+        "size": 5
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "countries": {
+      "terms": {
+        "field": "Country"
+      }
+    }
+  }
+}
+
+// avg unit price in belgium
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "query": {
+    "match": {
+      "Country": "Belgium"
+    }
+  },
+  "aggs": {
+    "belgium_avg": {
+      "avg": {
+        "field": "UnitPrice"
+      }
+    }
+  }
+}
+
+
+// 2. Bucket Aggregations
+
+
+GET kibana_sample_data_ecommerce/_search
+{
+  "size": 0,
+  "aggs": {
+    "currencies": {
+      "terms": {
+        "field": "day_of_week_i"
+      }
+    }
+  }
+}
+
+// i. Date-Histogram Aggregation
+
+
+GET ecommerce_data/_search
+
+// fixed interval
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_by_each_10h": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "fixed_interval": "10h",
+        "order": {
+          "_key": "desc"
+        }
+      }
+    }
+  }
+}
+
+
+// calender interval with desc order
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_by_each_8h": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "1M",
+        "order": {
+          "_key": "desc"
+        }
+      }
+    }
+  }
+}
+
+// ii. Histogram Aggregation
+
+// product purchase distribution acc to Price.
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "price_intervals": {
+      "histogram": {
+        "field": "UnitPrice",
+        "interval": 10
+      }
+    }
+  }
+}
+
+// iii. Range aggregation
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "range_purchase": {
+      "range": {
+        "field": "UnitPrice",
+        "ranges": [
+          {
+            "to": 20
+          },
+          {
+            "from": 20,
+            "to": 100
+          },
+          {
+            "from": 100,
+            "to": 200
+          },
+          {
+            "from": 200
+          }
+        ]
+      }
+    }
+  }
+}
+
+
+// iv. Terms Aggregation
+
+// 5 customers with least amount of orders
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "bottom_5_customers": {
+      "terms": {
+        "field": "CustomerID",
+        "size": 5
+        
+      }
+    }
+  }
+}
+
+
+// 3. Combined Aggregations
+
+
+GET ecommerce_data/_search
+
+// number of unique customers per day
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_per_day": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "day"
+      },
+      "aggs": {
+        "unique_customers_each_day": {
+          "cardinality": {
+            "field": "CustomerID"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+// day with highest revenue till date
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "transactions_per_day": {
+      "date_histogram": {
+        "field": "InvoiceDate",
+        "calendar_interval": "day",
+        "order": {
+          "daily_revenue": "desc"
+        }
+      },
+      "aggs": {
+        "daily_revenue": {
+          "sum": {
+            "script": {
+              "source": "doc['Quantity'].value * doc['UnitPrice'].value"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+GET ecommerce_data/_search
+{
+  "size": 0,
+  "aggs": {
+    "custom_stats": {
+      "stats": {
+        "script": {
+          "source": "doc['Quantity'].value * doc['UnitPrice'].value"
+        }
+      }
+    }
+  }
+}
+
