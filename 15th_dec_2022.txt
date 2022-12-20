@@ -1,0 +1,294 @@
+// thursday 15th December, 2022 - mapping and full-text queries
+
+
+// custom mapping implementation
+POST temp_index/_doc
+{
+  "name": "Pineapple",
+  "botanical_name": "Ananas comosus",
+  "produce_type": "Fruit",
+  "country_of_origin": "New Zealand",
+  "date_purchased": "2020-06-02T12:15:35",
+  "quantity": 200,
+  "unit_price": 3.11,
+  "description": "a large juicy tropical fruit consisting of aromatic edible yellow flesh surrounded by a tough segmented skin and topped with a tuft of stiff leaves.These pineapples are sourced from New Zealand.",
+  "vendor_details": {
+    "vendor": "Tropical Fruit Growers of New Zealand",
+    "main_contact": "Hugh Rose",
+    "vendor_location": "Whangarei, New Zealand",
+    "preferred_vendor": true
+  }
+}
+
+GET /temp_index/_mapping
+
+// defining custom mapping for index acc to usecase
+PUT produce_index
+{
+  "mappings": {
+    "properties": {
+      "botanical_name": {
+        "enabled": false
+      },
+      "country_of_origin": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "date_purchased": {
+        "type": "date"
+      },
+      "description": {
+        "type": "text"
+      },
+      "name": {
+        "type": "text"
+      },
+      "produce_type": {
+        "type": "keyword"
+      },
+      "quantity": {
+        "type": "long"
+      },
+      "unit_price": {
+        "type": "float"
+      },
+      "vendor_details": {
+        "enabled": false
+      }
+    }
+  }
+}
+
+GET produce_index/_mapping
+GET produce_index/_search
+
+POST produce_index/_doc
+{
+  "name": "Pineapple",
+  "botanical_name": "Ananas comosus",
+  "produce_type": "Fruit",
+  "country_of_origin": "New Zealand",
+  "date_purchased": "2020-06-02T12:15:35",
+  "quantity": 200,
+  "unit_price": 3.11,
+  "description": "a large juicy tropical fruit consisting of aromatic edible yellow flesh surrounded by a tough segmented skin and topped with a tuft of stiff leaves.These pineapples are sourced from New Zealand.",
+  "vendor_details": {
+    "vendor": "Tropical Fruit Growers of New Zealand",
+    "main_contact": "Hugh Rose",
+    "vendor_location": "Whangarei, New Zealand",
+    "preferred_vendor": true
+  }
+}
+
+POST produce_index/_doc
+{
+  "name": "Mango",
+  "botanical_name": "Harum Manis",
+  "produce_type": "Fruit",
+  "country_of_origin": "Indonesia",
+  "organic": true,
+  "date_purchased": "2020-05-02T07:15:35",
+  "quantity": 500,
+  "unit_price": 1.5,
+  "description": "Mango Arumanis or Harum Manis is originated from East Java. Arumanis means harum dan manis or fragrant and sweet just like its taste. The ripe Mango Arumanis has dark green skin coated with thin grayish natural wax. The flesh is deep yellow, thick, and soft with little to no fiber. Mango Arumanis is best eaten when ripe.",
+  "vendor_details": {
+    "vendor": "Ayra Shezan Trading",
+    "main_contact": "Suharto",
+    "vendor_location": "Binjai, Indonesia",
+    "preferred_vendor": true
+  }
+}
+
+// incorrect field type = object -> fails to POST
+POST produce_index/_doc
+{
+  "name": {"name": "Mango"},
+  "botanical_name": "Harum Manis",
+  "produce_type": "Fruit",
+  "country_of_origin": "Indonesia",
+  "organic": true,
+  "date_purchased": "2020-05-02T07:15:35",
+  "quantity": 500,
+  "unit_price": 1.5,
+  "description": "Mango Arumanis or Harum Manis is originated from East Java. Arumanis means harum dan manis or fragrant and sweet just like its taste. The ripe Mango Arumanis has dark green skin coated with thin grayish natural wax. The flesh is deep yellow, thick, and soft with little to no fiber. Mango Arumanis is best eaten when ripe.",
+  "vendor_details": {
+    "vendor": "Ayra Shezan Trading",
+    "main_contact": "Suharto",
+    "vendor_location": "Binjai, Indonesia",
+    "preferred_vendor": true
+  }
+}
+
+// incorrect field type = array -> fails to POST
+POST produce_index/_doc
+{
+  "name": [1,"Mango"],
+  "botanical_name": "Harum Manis",
+  "produce_type": "Fruit",
+  "country_of_origin": "Indonesia",
+  "organic": true,
+  "date_purchased": "2020-05-02T07:15:35",
+  "quantity": 500,
+  "unit_price": 1.5,
+  "description": "Mango Arumanis or Harum Manis is originated from East Java. Arumanis means harum dan manis or fragrant and sweet just like its taste. The ripe Mango Arumanis has dark green skin coated with thin grayish natural wax. The flesh is deep yellow, thick, and soft with little to no fiber. Mango Arumanis is best eaten when ripe.",
+  "vendor_details": {
+    "vendor": "Ayra Shezan Trading",
+    "main_contact": "Suharto",
+    "vendor_location": "Binjai, Indonesia",
+    "preferred_vendor": true
+  }
+}
+
+GET produce_index/_search
+
+GET produce_index/_mapping
+
+// now client requirement changed and he wants us to search "botanical_name" as well but that is disabled in our current mapping.
+// we cannot change the mapping of an exising index so we need to create a new mapping for existing data and reindex data to this new index
+
+PUT produce_index_v2
+{
+  "mappings": {
+    "properties": {
+      "botanical_name": {
+        "type": "text"
+      },
+      "country_of_origin": {
+        "type": "text",
+        "fields": {
+          "keyword": {
+            "type": "keyword",
+            "ignore_above": 256
+          }
+        }
+      },
+      "date_purchased": {
+        "type": "date"
+      },
+      "description": {
+        "type": "text"
+      },
+      "name": {
+        "type": "text"
+      },
+      "organic": {
+        "type": "boolean"
+      },
+      "produce_type": {
+        "type": "keyword"
+      },
+      "quantity": {
+        "type": "long"
+      },
+      "unit_price": {
+        "type": "float"
+      },
+      "vendor_details": {
+        "type": "object",
+        "enabled": false
+      }
+    }
+  }
+}
+
+GET produce_index_v2/_mapping
+
+
+POST _reindex 
+{
+  "source": {
+    "index": "produce_index"
+  },
+  "dest": {
+    "index": "produce_index_v2"
+  }
+}
+
+GET produce_index_v2/_search
+
+PUT produce_index_v2/_mapping
+{
+  "runtime": {
+    "total": {
+      "type": "double",
+      "script": {
+        "source": "emit(doc['quantity'].value*doc['quantity'].value)"
+      }
+    }
+  }
+}
+
+GET produce_index_v2/_mapping
+
+GET produce_index_v2/_search 
+{
+  "size": 0,
+  "aggs": {
+    "total_expense": {
+      "sum": {
+        "field": "total"
+      }
+    }
+  }
+}
+
+
+
+
+// full text queries
+
+GET _cat/indices?v=true
+GET /dummy_np/_search
+
+GET /dummy_np/_mapping
+
+GET /dummy_np/_search
+{
+  "query": {
+    "match": {
+      "headline": "obama michelle"
+    }
+  }
+}
+
+GET /dummy_np/_search
+{
+  "query": {
+    "match_phrase": {
+      "headline": "Michelle obama"
+    }
+  }
+}
+
+GET /dummy_np/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "michelle obama",
+      "fields": [
+        "headline^2",
+        "short_description",
+        "authors"
+      ]
+    }
+  }
+}
+
+GET /dummy_np/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "party planning",
+      "fields": [
+        "headline^2",
+        "short_description"
+      ],
+      "type": "phrase"
+    }
+  }
+}
