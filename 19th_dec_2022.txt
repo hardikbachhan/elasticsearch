@@ -1,0 +1,336 @@
+
+
+// 19th December, 2022
+
+
+// geolocation data
+GET /geo_data/_search
+
+// get all countries and states in 2000 km radius distance from 42.54, 1.6
+GET /geo_data/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match_all": {}
+        }
+      ],
+      "filter": [
+        {
+          "geo_distance": {
+            "distance": "2000km",
+            "location": {
+              "lat": 42.54,
+              "lon": 1.6
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+// create pipeline to remove unnecessary data from geo_data
+PUT _ingest/pipeline/geo_pipeline
+{
+  "description": "pipeline to remove unnecessary fields",
+  "processors": [
+    {
+      "remove": {
+        "field": ["usa_state_longitude", "usa_state", "latitude", "usa_state_code", "usa_state_latitude", "longitude"],
+        "ignore_missing": true
+      }
+    }
+  ]
+}
+
+POST _ingest/pipeline/geo_pipeline/_simulate
+{
+  "docs": [
+    {
+      "_source": {
+          "usa_state_longitude": -154.493062,
+          "country_code": "AD",
+          "country": "Andorra",
+          "usa_state": "Alaska",
+          "latitude": 42.546245,
+          "usa_state_code": "AK",
+          "location": "42.546245,1.601554",
+          "usa_state_latitude": 63.588753,
+          "longitude": 1.601554
+        }
+    },
+    {
+      "_source": {
+          "usa_state_longitude": -154.493062,
+          "country_code": "AD",
+          "country": "Andorra",
+          "usa_state": "Alaska",
+          "latitude": 42.546245,
+          "usa_state_code": "AK",
+          "location": "42.546245,1.601554",
+          "usa_state_latitude": 63.588753
+        }
+    }
+  ]
+}
+
+// define mapping for new index else elasticsearch will define field as text
+PUT /country_geo_data
+{
+  "mappings": {
+    "properties": {
+      "location": {
+        "type": "geo_point"
+      }
+    }
+  }
+}
+
+
+// reindex geo data
+POST _reindex?wait_for_completion=false
+{
+  "source": {
+    "index": "geo_data"
+  },
+  "dest": {
+    "index": "country_geo_data",
+    "op_type": "create",
+    "pipeline": "geo_pipeline"
+  }
+}
+
+// check task progress
+GET _tasks/0Ju0zN_4Qdqq5myyW5Oi-g:432244
+
+
+GET /country_geo_data/_search
+
+// get all countries and states in 2000 km radius distance from 42.54, 1.6
+GET /country_geo_data/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match_all": {}
+        }
+      ],
+      "filter": [
+        {
+          "geo_distance": {
+            "distance": "2000km",
+            "location": {
+              "lat": 42.54,
+              "lon": 1.6
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+// highlighting
+
+
+GET /dummy_np/_mapping
+
+GET /dummy_np/_search
+{
+  "query": {
+    "match": {
+      "authors": "Mary"
+    }
+  },
+  "highlight": {
+    "fields": {
+      "authors": {}
+    }
+  }
+}
+
+GET /dummy_np/_search
+{
+  "query": {
+    "match_phrase": {
+      "headline": "Michelle Obama"
+    }
+  },
+  "highlight": {
+    "fields": {
+      "headline": {}
+    }
+  }
+}
+
+GET /dummy_np/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "Michelle obama",
+      "operator": "and", 
+      "fields": [
+        "authors^3",
+        "headline^2", 
+        "short_description"
+      ]
+    }
+  },
+  "highlight": {
+    "fields": {
+      "authors": {},
+      "headline": {},
+      "short_description": {}
+    }
+  }
+}
+
+
+
+
+// POC for search-as-you-type
+
+// if search-as-you-type is used, field._2gram, field._3gram, field._index_prefix is genetated at runtime.
+
+// Also, bool_prefix type matches the searched words in any order, but also assigns a higher score to words in the same order as the query (autocomplete scenario) -> to be used when field type is text
+
+// Edge N-grams have the advantage when trying to autocomplete words that can appear in any order.
+
+// When you need search-as-you-type for text which has a widely known order, such as movie or song titles, the completion suggester is a much more efficient choice than edge N-grams.
+
+
+
+// tokens generated
+GET dummy_np/_analyze
+{
+  "field": "headline._index_prefix",
+  "text": "par"
+}
+
+GET dummy_np_v4/_analyze
+{
+  "field": "headline._index_prefix",
+  "text": "par"
+}
+
+// base index mapping
+GET dummy_np/_mapping
+
+
+// for base index, fieldtype(headline): text
+
+
+GET dummy_np/_search
+{
+  "query": {
+    "match": {
+      "headline": "par"
+    }
+  }
+}
+
+
+GET dummy_np/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "par",
+      "type": "bool_prefix",
+      "fields": [
+        "headline"
+      ]
+    }
+  }
+}
+
+
+GET dummy_np/_search
+{
+  "query": {
+    "match_bool_prefix": {
+      "headline": "par"
+    }
+  }
+}
+
+
+GET dummy_np/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "headline": "par"
+    }
+  }
+}
+
+
+GET dummy_np/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "authors": "diaan"
+    }
+  }
+}
+
+GET dummy_np/_search
+{
+  "query": {
+    "match_bool_prefix": {
+      "authors": "diaan"
+    }
+  }
+}
+
+// base index mapping
+GET dummy_np_v4/_mapping
+
+// for search-as-you-type index, fieldtype(headline): search-as-you-type
+GET dummy_np_v4/_search
+{
+  "query": {
+    "multi_match": {
+      "query": "par",
+      "type": "bool_prefix",
+      "fields": [
+        "headline",
+        "headline._2gram",
+        "headline._3gram",
+        "headline._index_prefix"
+      ]
+    }
+  }
+}
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "headline": "par"
+    }
+  }
+}
+
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match_phrase_prefix": {
+      "authors": "diaan"
+    }
+  }
+}
+
+GET dummy_np_v4/_search
+{
+  "query": {
+    "match_bool_prefix": {
+      "authors": "diaan"
+    }
+  }
+}
