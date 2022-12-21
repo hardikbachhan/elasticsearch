@@ -1,0 +1,740 @@
+
+
+// 20th December, 2022
+
+
+
+// Nested Queries
+// Wraps another query to search nested fields. The nested query searches nested field objects as if they were indexed as separate documents. 
+// If an object matches the search, the nested query returns the root parent document. 
+// To use the nested query, your index must include a nested field mapping.
+// Use the inner_hits parameter to see which nested objects matched a nested query.
+
+
+// Object Field Type
+// ------------------
+// You are not required to set the field type to object explicitly, as this is the default value.
+
+// If you need to index arrays of objects instead of single objects, read Nested first.
+
+// Association between keys of same object is lost
+
+POST /test/_doc
+{
+  "group": "fans",
+  "users": [
+    {
+      "first": "Alice",
+      "last": "White"
+    },
+    {
+      "first": "John",
+      "last": "Smith"
+    }
+  ]
+}
+
+// Internally saved as:
+
+// {
+//   "group" :        "fans",
+//   "user.first" : [ "alice", "john" ],
+//   "user.last" :  [ "smith", "white" ]
+// }
+
+
+GET test/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {"users.first": "alice"}
+        },
+        {
+          "match": {"users.last": "white"}
+        }
+      ]
+    }
+  }
+}
+
+
+
+// Nested Field Type
+// ------------------
+// The nested type is a specialised version of the object data type that allows arrays of objects to be indexed in a way that they can be queried independently of each other.
+
+// Elasticsearch has no concept of inner objects. Therefore, it flattens object hierarchies into a simple list of field names and values.
+
+// If you need to index arrays of objects and to maintain the independence of each object in the array, use the nested data type instead of the object data type.
+
+// Internally, nested objects index each object in the array as a separate hidden document, meaning that each nested object can be queried independently of the others with the nested query
+
+
+PUT test_nested/
+{
+  "mappings": {
+    "properties": {
+      "users": {
+        "type": "nested"
+      }
+    }
+  }
+}
+
+
+POST test_nested/_doc
+{
+  "group": "fans",
+  "users": [
+    {
+      "first": "Alice",
+      "last": "White"
+    },
+    {
+      "first": "John",
+      "last": "Smith"
+    }
+  ]
+}
+
+POST test_nested/_doc
+{
+  "group": "staff",
+  "users": [
+    {
+      "first": "Alice",
+      "last": "wood"
+    },
+    {
+      "first": "Alex",
+      "last": "kane"
+    }
+  ]
+}
+
+GET test_nested/_search
+
+GET test_nested/_search
+{
+  "query": {
+    "nested": {
+      "path": "users",
+      "query": {
+        "bool": {
+          "must": [
+            { "match": { "users.first": "alice" }}
+          ]
+        }
+      },
+      "inner_hits": {
+        "highlight": {
+          "fields": {
+            "users.first": {}
+          }
+        }
+      }
+    }
+  }
+}
+// inner_hits allow us to highlight the matching nested documents.
+
+
+PUT inner_nested_test
+{
+  "mappings": {
+    "properties": {
+      "comments": {
+        "type": "nested",
+        "properties": {
+          "votes": {
+            "type": "nested"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+POST inner_nested_test/_doc/
+{
+  "title": "Test title",
+  "comments": [
+    {
+      "author": "kimchy",
+      "text": "comment text",
+      "votes": []
+    },
+    {
+      "author": "nik9000",
+      "text": "words words words",
+      "votes": [
+        {"value": 1 , "voter": "kimchy"},
+        {"value": -1, "voter": "other"}
+      ]
+    }
+  ]
+}
+
+GET inner_nested_test/_search
+{
+  "query": {
+    "nested": {
+      "path": "comments.votes",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "comments.votes.voter": "kimchy"
+              }
+            }
+          ]
+        }
+      },
+      "inner_hits": {
+        "highlight": {
+          "fields": {
+            "comments.votes.voter": {}  
+          }
+        }
+      }
+    }
+  }
+}
+
+
+
+// index with one-to-many relationship
+PUT one_to_many
+{
+  "mappings": {
+    "properties": {
+      "user": {
+        "type": "nested",
+        "properties": {
+          "tickets": {
+            "type": "nested"
+          }
+        }
+      }
+    }
+  }
+}
+
+
+POST one_to_many/_doc/
+{
+   "org":"microsoft",
+   "department": "azure",
+   "user":[
+      {
+         "first":"Soumil",
+         "last":"Shah",
+         "tickets":[
+            {
+               "ticket_number":1
+            }
+         ]
+      },
+      {
+         "first":"Nitin",
+         "last":"Shah",
+         "tickets":[
+            {
+               "ticket_number":1
+            },
+             {
+               "ticket_number":121212
+            }
+         ]
+      }
+   ]
+}
+
+GET one_to_many/_mapping
+
+POST one_to_many/_doc
+{
+   "org":"amazon",
+   "department": "aws",
+   "user":[
+      {
+         "first":"vivek",
+         "last":".",
+         "tickets":[
+            {
+               "ticket_number": 1234
+            }
+         ]
+      },
+      {
+         "first":"abhinav",
+         "last":"lal",
+         "tickets":[
+            {
+               "ticket_number": 1
+            }
+         ]
+      }
+   ]
+}
+
+GET one_to_many/_mapping
+
+GET one_to_many/_search
+
+
+// documents where ORG is microsoft
+// ------------------------------
+GET one_to_many/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "org": "microsoft"
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+
+// Give me  all tickets for user first name is soumil 
+// ------------------------------
+GET one_to_many/_search
+{
+  "query": {
+    "nested": {
+      "path": "user",
+      "query": {
+        "bool": {
+          "must": [
+            {
+              "match": {
+                "user.first": "soumil"
+              }
+            }
+          ]
+        }
+      },
+      "inner_hits": {
+        "_source": "user.tickets"
+      }
+    }
+  }
+}
+
+
+
+// Give me  all Users who are assigned ticket 1
+// ------------------------------
+GET one_to_many/_search
+{
+  "query": {
+    "nested": {
+      "path": "user",
+      "query": {
+        "nested": {
+          "path": "user.tickets",
+          "query": {
+            "bool": {
+              "must": [
+                {
+                  "match": {
+                    "user.tickets.ticket_number": 1
+                  }
+                }
+              ]
+            }
+          }
+        }
+      },
+      "inner_hits": {
+        "_source": "user.first"
+      }
+    }
+  }
+}
+
+
+// Give me  all user in microsoft and tickets is 1
+// ------------------------------
+GET one_to_many/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "org": "microsoft"
+          }
+        },
+        {
+          "nested": {
+            "path": "user",
+            "query": {
+              "nested": {
+                "path": "user.tickets",
+                "query": {
+                  "bool": {
+                    "must": [
+                      {
+                        "match": {
+                          "user.tickets.ticket_number": 1
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "inner_hits": {
+              "_source": "user"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+// Give me all user in amazon and tickets is 1234
+// ------------------------------
+GET one_to_many/_search
+{
+  "query": {
+    "bool": {
+      "must": [
+        {
+          "match": {
+            "org": "amazon"
+          }
+        },
+        {
+          "nested": {
+            "path": "user",
+            "query": {
+              "nested": {
+                "path": "user.tickets",
+                "query": {
+                  "bool": {
+                    "must": [
+                      {
+                        "match": {
+                          "user.tickets.ticket_number": 1234
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
+            "inner_hits": {
+              "_source": "user"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+
+
+
+
+
+
+// creating ingest pipelines to transform data to be saved in index or data stream
+
+// custom pipeline to check and convert field value to lower case
+
+
+// get all piplines
+GET _ingest/pipeline
+
+// delete a created pipeline
+DELETE _ingest/pipeline/lowercase_pipeline
+
+
+
+PUT _ingest/pipeline/checktype_pipeline
+{
+  "version": 1,
+  "description": "Pipeline to convert name field value to lowercase",
+  "processors": [
+    {
+      "grok": {
+        "field": "name",
+        "patterns": [
+          "%{WORD}"
+        ],
+        "tag": "grok",
+        "trace_match": true
+      }
+    },
+    {
+      "lowercase": {
+        "description": "check type of name and convert to lowercase",
+        "field": "name",
+        "tag": "lowercase"
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "pipeline": {
+        "description": "Pipeline to move docs with error to index-error-user",
+        "name": "index-error-user"
+      }
+    }
+  ]
+}
+
+
+// simulation of how the pipeline will work
+POST _ingest/pipeline/checktype_pipeline/_simulate
+{
+  "docs": [
+    {
+      "_source": {
+        "name": "Abcd"
+      }
+    },
+    {
+      "_source": {
+        "name": "ABCD"
+      }
+    },
+    {
+      "_source": {
+        "name": {"key": "ABCD"}
+      }
+    },
+    {
+      "_source": {
+        "name": "AbcD"
+      }
+    },
+    {
+      "_source": {
+        "name": ["ABCD"]
+      }
+    },
+    {
+      "_source": {
+        "name": 789
+      }
+    }
+  ]
+}
+
+
+
+
+// component template to define error index template
+PUT _component_template/index-error-mapping-template
+{
+  "template": {
+    "mappings": {
+      "properties": {
+        "name": {
+          "type": "text"
+        },
+        "event": {
+          "properties": {
+            "index": {
+              "type": "keyword"
+            },
+            "created": {
+              "type": "date"
+            },
+            "error": {
+              "properties": {
+                "message": {
+                  "type": "text"
+                },
+                "processor_type": {
+                  "type": "keyword"
+                },
+                "processor_tag": {
+                  "type": "keyword"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// creating common index template for tables with same prefix
+PUT _index_template/index-error-index-template
+{
+  "index_patterns": "index-error-*",
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0
+    }
+  },
+  "composed_of": [
+    "index-error-mapping-template"
+  ]
+}
+
+
+
+PUT _ingest/pipeline/index-error-user
+{
+  "description": "Index documents in user error log",
+  "processors": [
+    {
+      "set": {
+        "field": "event.index",
+        "value": "{{{ _index }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.created",
+        "value": "{{{ _ingest.timestamp }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.message",
+        "value": "{{{ _ingest.on_failure_message }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.processor_type",
+        "value": "{{{ _ingest.on_failure_processor_type }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.processor_tag",
+        "value": "{{{ _ingest.on_failure_processor_tag }}}"
+      }
+    },
+    {
+      "set": {
+        "description": "Route document to index-error-user",
+        "field": "_index",
+        "value": "index-error-{{{ _index }}}"
+      }
+    }
+  ]
+}
+
+
+// adding user data to user index
+POST user/_doc?pipeline=checktype_pipeline
+{
+  "name": 123
+}
+
+
+
+GET user/_search
+GET index-error-user/_search
+
+
+
+
+
+// test for index costs
+PUT _ingest/pipeline/validate_int_pipeline
+{
+  "processors": [
+    {
+      "grok": {
+        "field": "amount",
+        "patterns": [
+          "%{POSINT}"
+        ],
+        "tag": "grok",
+        "trace_match": true
+      }
+    }
+  ],
+  "on_failure": [
+    {
+      "pipeline": {
+        "description": "Pipeline to move docs with error to index-error-costs",
+        "name": "index-error-costs"
+      }
+    }
+  ]
+}
+
+PUT _ingest/pipeline/index-error-costs
+{
+  "description": "Index documents in costs error log",
+  "processors": [
+    {
+      "set": {
+        "field": "event.index",
+        "value": "{{{ _index }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.created",
+        "value": "{{{ _ingest.timestamp }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.message",
+        "value": "{{{ _ingest.on_failure_message }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.processor_type",
+        "value": "{{{ _ingest.on_failure_processor_type }}}"
+      }
+    },
+    {
+      "set": {
+        "field": "event.error.processor_tag",
+        "value": "{{{ _ingest.on_failure_processor_tag }}}"
+      }
+    },
+    {
+      "set": {
+        "description": "Route document to index-error-costs",
+        "field": "_index",
+        "value": "index-error-{{{ _index }}}"
+      }
+    }
+  ]
+}
+
+
+
+POST costs/_doc?pipeline=validate_int_pipeline
+{
+  "amount": -12
+}
+
+GET costs/_search
+GET index-error-costs/_search
+
+
+
+
+
+
+
